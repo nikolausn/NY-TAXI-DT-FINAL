@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New York Taxi Fare Calculator</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+        /* Always set the map height explicitly to define the size of the div
+         * element that contains the map. */
+        #map {
+            height: 100%;
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .custom-date-style {
+            background-color: red !important;
+        }
+
+        .input {
+        }
+
+        .input-wide {
+            width: 500px;
+        }
+    </style>
+    <!--
+    <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+    -->
+    <script src="./jquery.js"></script>
+</head>
+<body>
+<div>
+    <table>
+        <tr>
+            <td>From:</td>
+            <td><input name="from_loc" id="from_loc" type="text">
+                <button id="choose_from">Choose Location</button>
+            </td>
+            <td><span id="from_place"></span></td>
+        </tr>
+        <tr>
+            <td>To:</td>
+            <td><input name="to_loc" id="to_loc" type="text">
+                <button id="choose_to">Choose Location</button>
+            </td>
+            <td><span id="to_place"></span></td>
+        </tr>
+        <tr>
+            <td>Time:</td>
+            <td><input type="text" id="datetimepicker"/>
+                <button id="now_time">now</button>
+            </td>
+            <td rowspan="3" id="fare_result"></td>
+        </tr>
+        <tr>
+            <td>Total Passenger:</td>
+            <td><input type="number" value="1" id="tot_passenger"/>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <button id="calc_dist">Calculate Taxi Fare</button>
+            </td>
+        </tr>
+
+    </table>
+</div>
+<div id="map"></div>
+<script>
+    var from_click_listen = false
+    var to_click_listen = false
+    var from_loc = null;
+    var to_loc = null;
+    var xhr = new XMLHttpRequest();
+    $("#choose_from").click(function () {
+        to_click_listen = false;
+        $("#choose_to").text("Choose Location");
+        from_click_listen = !from_click_listen
+        if (from_click_listen) {
+            $("#choose_from").text("Finish Marking")
+        } else {
+            $("#choose_from").text("Choose Location")
+        }
+    })
+
+    $("#choose_to").click(function () {
+        from_click_listen = false;
+        $("#choose_from").text("Choose Location");
+        to_click_listen = !to_click_listen
+        if (to_click_listen) {
+            $("#choose_to").text("Finish Marking")
+        } else {
+            $("#choose_to").text("Choose Location")
+        }
+    })
+
+    $("#calc_dist").click(function () {
+        success = function (data) {
+            //alert(data);
+            $("#from_place").text("Origin: "+data["start"])
+            $("#to_place").text("Destination: "+data["dest"])
+
+            msg = ""
+            if(data["type"] == 1){
+                msg = " (Outside of NY City Location, Fare Amount calculated using distance and time only)"
+            }
+
+            $("#fare_result").html("Distance: "+data["distance"]+"<br /> Travel Duration: "+data["duration"]+"<br /> Fare Amount: $"+(Math.round(data["fare"]*100)/100)+msg);
+        };
+
+        dataType = "json";
+
+        from_dict = {
+            "lat": from_loc["lat"](),
+            "lng": from_loc["lng"]()
+        }
+
+        to_dict = {
+            "lat": to_loc["lat"](),
+            "lng": to_loc["lng"]()
+        }
+
+        $.ajax({
+            type: "POST",
+            url: "/calculate_fare",
+            data: JSON.stringify({
+                "start": from_dict,
+                "dest": to_dict,
+                "passenger_count": $("#tot_passenger").val(),
+                "pickup_time": $("#datetimepicker").val()
+            }),
+            success: success,
+            dataType: dataType,
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json"
+              }
+        });
+    })
+
+    $("#now_time").click(function () {
+        my_now = new Date()
+        initial_date = my_now.getFullYear() + "/" + (my_now.getMonth() + 1) + "/" + my_now.getDate() + " " + my_now.getHours() + ":" + my_now.getMinutes();
+        $("#datetimepicker").val(initial_date);
+    });
+
+    function initMap() {
+        var map = new google.maps.Map(document.getElementById('map'), {
+            zoom: 12,
+            center: {lat: 40.750, lng: -73.975}
+        });
+
+        var from_marker;
+        var to_marker;
+
+        google.maps.event.addListener(map, 'click', function (event) {
+            placeMarker(event.latLng);
+        });
+
+        function placeMarker(location) {
+            if (from_click_listen) {
+                if (from_marker == null) {
+                    from_marker = new google.maps.Marker({
+                        position: location,
+                        map: map,
+                        label: "Start"
+                    });
+                } else {
+                    from_marker.setPosition(location);
+                }
+                from_loc = location;
+                $("#from_loc").val(location)
+            }
+            if (to_click_listen) {
+                if (to_marker == null) {
+                    to_marker = new google.maps.Marker({
+                        position: location,
+                        map: map,
+                        label: "Dest"
+                    });
+                } else {
+                    to_marker.setPosition(location);
+                }
+                to_loc = location;
+                $("#to_loc").val(location)
+            }
+        }
+
+    }
+
+
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7_KvLPtVesTg7NLxXnL_czMlX7GcyXXw&callback=initMap"
+        async defer>
+</script>
+</body>
+<link rel="stylesheet" type="text/css" href="./jquery.datetimepicker.css"/>
+<script src="./jquery.datetimepicker.full.js"></script>
+<script>
+    $.datetimepicker.setLocale('en');
+    /*
+    my_now = new Date()
+    initial_date = my_now.getFullYear()+"/"+(my_now.getMonth()+1)+"/"+my_now.getDate()+" "+my_now.getHours()+":"+my_now.getMinutes();
+    $("#datetimepicker").val(initial_date);
+    */
+    $("#now_time").click();
+    jQuery('#datetimepicker').datetimepicker();
+</script>
+</html>
